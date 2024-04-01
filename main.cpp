@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <iomanip>
 
 using namespace std;
 
@@ -9,34 +10,49 @@ struct usuario_empleado //estructura para el usuario de los empleados del banco
   string contrasena;
 };
 
+struct Movimiento
+{
+    string info;
+    double monto;
+    Movimiento *next;
+};
+
 struct Cuenta_ahorro
 {
+    double saldoInicial;
     double saldo;
     double interes;
     Cuenta_ahorro *next;
+    Movimiento *mnext;
 };
 
 struct Cuenta_corriente
 {
+    double saldoInicial;
     double saldo;
     int  plazo;
     Cuenta_corriente *next;
+    Movimiento *mnext;
 };
 
 struct Credito
 {
+    double saldoInicial;
     double saldo;
     double interes;
     int plazo;
     Credito *next;
+    Movimiento *mnext;
 };
 
 struct CDT
 {
+    double saldoInicial;
     double saldo;
     double interes;
     int plazo;
     CDT *next;
+    Movimiento *mnext;
 };
 
 struct Cliente
@@ -62,6 +78,8 @@ void mostrarClientes(Cliente *&clientes, int &tam);
 bool modificarClientes(Cliente *&clientes, int tam, string correo);
 bool eliminarCliente(Cliente *&clientes, int &tam, string correo);
 bool realizarPrestamo(Cliente *&clientes, int &tam, string correo);
+void liquidarProductos(Cliente &cliente);
+void generarExtractos(Cliente *clientes, int numClientes);
 
 int main()
 {
@@ -85,6 +103,7 @@ void menuOperacion(Cliente *&clientes, int &tam)
         cout << "5. Prestamo a cliente" << endl;
         cout << "6. Hacer corte de los productos" << endl;
         cout << "7. Salir" << endl;
+        cin >> op;
         switch(op)
         {
             case 1:
@@ -94,22 +113,34 @@ void menuOperacion(Cliente *&clientes, int &tam)
             mostrarClientes(clientes, tam);
             break;
             case 3:
+            cin.ignore();
             cout << "Ingrese el correo del cliente a modificar" << endl;
             getline(cin, correo);
-            modificarClientes(clientes, tam, correo);
+            if(!modificarClientes(clientes, tam, correo))
+            {
+                cout << "Operacion fallida" << endl;
+            }
             break;
             case 4:
+            cin.ignore();
             cout << "Ingrese el correo del cliente a eliminar" << endl;
             getline(cin, correo);
-            eliminarCliente(clientes, tam, correo);
+            if(!eliminarCliente(clientes, tam, correo))
+            {
+                cout << "Operacion fallida" << endl;
+            }
             break;
             case 5:
+            cin.ignore();
             cout << "Ingrese el correo del cliente a realizar el prestamo" << endl;
             getline(cin, correo);
-            realizarPrestamo(clientes,tam,correo);
+            if(!realizarPrestamo(clientes,tam,correo))
+            {
+                cout << "Operacion fallida" << endl;
+            }
             break;
             case 6:
-            cout << "Opcion no realizada aun" << endl;
+            generarExtractos(clientes, tam);
             break;
             case 7:
             cout << "Saliendo..." << endl; 
@@ -352,20 +383,172 @@ bool realizarPrestamo(Cliente *&clientes, int &tam, string correo)
             Credito *nuevo = new Credito; //Pedir memoria para el nuevo prestamo
             cout << "Ingrese el Saldo del credito:" << endl;
             cin >> nuevo->saldo;
+            nuevo->saldoInicial = nuevo->saldo;
             cout << "Ingrese el procentaje de Interes del credito:" << endl;
             cin >> nuevo->interes;
             cout << "Ingrese el Plazo del credito:" << endl;
             cin >> nuevo->plazo;
             Credito *temp = clientes[i].c;
+            if(temp == nullptr) //Operacion para cuando no hay ningun prestamos realizado
+            {
+                clientes[i].c = nuevo;
+                nuevo->next = nuevo;
+                nuevo->mnext = nullptr;
+                return true;
+            }
             do
             {
                 temp = temp->next;
             } while (temp != clientes[i].c); //Encontrar el ultimo prestamo del cliente
             temp->next = nuevo; //apunta el siguiente prestamo del ultimo al nuevo prestamo creado
             nuevo->next = clientes[i].c; //Enlazar los prestamos nuevamente
+            nuevo->mnext = nullptr;
             return true; //Se completo exitosamente el prestamo
         }
     }
     return false; //No se encontro a el cliente especificado   
 }
- 
+
+void liquidarProductos(Cliente &cliente) {
+    // Liquidar intereses de la cuenta de ahorro
+    if (cliente.ca != nullptr) {
+        Cuenta_ahorro* tempCuentaAhorro = cliente.ca;
+        do {
+            double interesesAhorro = tempCuentaAhorro->saldo * tempCuentaAhorro->interes;
+            tempCuentaAhorro->saldo += interesesAhorro;
+            tempCuentaAhorro = tempCuentaAhorro->next;
+        } while (tempCuentaAhorro != cliente.ca);
+    }
+
+    // Liquidar intereses de los CDTs
+    if (cliente.cdt != nullptr) {
+        CDT* tempCDT = cliente.cdt;
+        do {
+            double interesesCDT = (tempCDT->saldo * tempCDT->interes) * tempCDT->plazo;
+            tempCDT->saldo += interesesCDT;
+            tempCDT = tempCDT->next;
+        } while (tempCDT != cliente.cdt);
+    }
+
+    // Liquidar intereses de los préstamos
+    if (cliente.c != nullptr) {
+        Credito* tempCredito = cliente.c;
+        do {
+            double interesesPrestamo = (tempCredito->saldo * tempCredito->interes) * tempCredito->plazo;
+            tempCredito->saldo += interesesPrestamo;
+            tempCredito = tempCredito->next;
+        } while (tempCredito != cliente.c);
+    }
+}
+
+void generarExtractos(Cliente *clientes, int numClientes) {
+    int cont = 0;
+    for (int i = 0; i < numClientes; ++i) {
+        Cliente cliente = clientes[i];
+        cout << "Extractos para el cliente: " << cliente.nombre << " " << cliente.apellido << endl;
+        cout << "---------------------------------------------" << endl;
+        liquidarProductos(cliente);
+        // Extracto de cuenta de ahorro
+        Cuenta_ahorro *ca = cliente.ca;
+        if (ca != nullptr) {
+            Cuenta_ahorro *inicio = ca;
+            cont = 1;
+            do {
+                cout << "Cuenta de Ahorro: " << cont << endl;
+                cout << "Saldo inicial del periodo: $" << fixed << setprecision(2) << ca->saldoInicial << endl;
+                cout << "Saldo final: $" << fixed << setprecision(2) << ca->saldo << endl;
+                if(ca->mnext != nullptr)
+                {
+                    cout << "----------------------Movimientos-----------------------" << endl;
+                    Movimiento *m = ca->mnext;
+                    do{
+                        cout << "Descripcion: " << m->info << endl;
+                        cout << m->monto << endl;
+                        m = m->next;
+                        cout << endl;
+                    }while(m != ca->mnext);
+                }
+                cout << "---------------------------------------------" << endl;
+                ca = ca->next;
+                cont++;
+            } while (ca != inicio);
+        }
+
+        // Extracto de cuenta corriente
+        Cuenta_corriente *cc = cliente.cc;
+        if (cc != nullptr) {
+            Cuenta_corriente *inicio = cc;
+            cont = 1;
+            do {
+                cout << "Cuenta Corriente:" << cont << endl;
+                cout << "Saldo inicial del periodo: $" << fixed << setprecision(2) << cc->saldoInicial << endl;
+                cout << "Saldo final a pagar: $" << fixed << setprecision(2) << cc->saldo << endl;
+                if(cc->mnext != nullptr)
+                {
+                    cout << "----------------------Movimientos-----------------------" << endl;
+                    Movimiento *m = cc->mnext;
+                    do{
+                        cout << "Descripcion: " << m->info << endl;
+                        cout << m->monto << endl;
+                        m = m->next;
+                        cout << endl;
+                    }while(m != cc->mnext);
+                }
+                cout << "---------------------------------------------" << endl;
+                cc = cc->next;
+            } while (cc != inicio);
+        }
+
+        // Extracto de crédito
+        Credito *c = cliente.c;
+        if (c != nullptr) {
+            Credito *inicio = c;
+            cont = 1;
+            do {
+                cout << "Crédito:" << cont << endl;
+                cout << "Saldo inicial del periodo: $" << fixed << setprecision(2) << c->saldoInicial << endl;
+                if(c->mnext != nullptr)
+                {
+                    cout << "----------------------Movimientos-----------------------" << endl;
+                    Movimiento *m = c->mnext;
+                    do{
+                        cout << "Descripcion: " << m->info << endl;
+                        cout << m->monto << endl;
+                        m = m->next;
+                        cout << endl;
+                    }while(m != c->mnext);
+                }
+                cout << "Saldo final a pagar: $" << fixed << setprecision(2) << c->saldo << endl;
+                cout << "---------------------------------------------" << endl;
+                c = c->next;
+            } while (c != inicio);
+        }
+
+        // Extracto de CDT
+        CDT *cdt = cliente.cdt;
+        if (cdt != nullptr) {
+            CDT *inicio = cdt;
+            cont = 1;
+            do {
+                cout << "CDT:" << cont << endl;
+                cout << "Saldo inicial del periodo: $" << fixed << setprecision(2) << cdt->saldoInicial << endl;
+                if(cdt->mnext != nullptr)
+                {
+                    cout << "----------------------Movimientos-----------------------" << endl;
+                    Movimiento *m = cdt->mnext;
+                    do{
+                        cout << "Descripcion: " << m->info << endl;
+                        cout << m->monto << endl;
+                        m = m->next;
+                        cout << endl;
+                    }while(m != cdt->mnext);
+                }
+                cout << "Saldo final: $" << fixed << setprecision(2) << cdt->saldo << endl;
+                cout << "---------------------------------------------" << endl;
+                cdt = cdt->next;
+            } while (cdt != inicio);
+        }
+
+        cout << endl;
+    }
+}
